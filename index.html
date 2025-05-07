@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>sw/fw final</title>
+  <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
+  <script>
+    // -------- CONFIGURATION --------
+    const galleryPath = 'assets/gallery/';
+    const audioPath   = 'assets/audio/';
+    const artworks = [
+      { id:'A', img:'a.jpeg', snd:'a.m4a', position:[-12,1.6,-19], rotation:[0,   0,0] },
+      { id:'B', img:'b.jpeg', snd:'b.wav', position:[  0,1.6,-19], rotation:[0,   0,0] },
+      { id:'C', img:'c.jpeg', snd:'c.wav', position:[ 12,1.6,-19], rotation:[0,   0,0] },
+      { id:'D', img:'d.jpeg', snd:'d.mp3', position:[-12,1.6, 19], rotation:[0, 180,0] },
+      { id:'E', img:'e.jpeg', snd:'e.wav', position:[  0,1.6, 19], rotation:[0, 180,0] },
+      { id:'F', img:'f.jpeg', snd:'f.mp3', position:[ 12,1.6, 19], rotation:[0, 180,0] },
+      { id:'G', img:'g.jpeg', snd:'g.mp3', position:[-19,1.6,-12], rotation:[0,  90,0] },
+      { id:'H', img:'h.jpeg', snd:'h.mp3', position:[-19,1.6,  0], rotation:[0,  90,0] },
+      { id:'I', img:'i.jpeg', snd:'i.mp3', position:[-19,1.6, 12], rotation:[0,  90,0] },
+      { id:'J', img:'j.jpeg', snd:'j.mp3', position:[ 19,1.6,-12], rotation:[0, -90,0] },
+      { id:'K', img:'k.jpeg', snd:'k.mp3', position:[ 19,1.6,  0], rotation:[0, -90,0] },
+      { id:'L', img:'l.jpeg', snd:'l.mp3', position:[ 19,1.6, 12], rotation:[0, -90,0] }
+    ];
+
+    // -------- COMPONENT: fade-on-proximity --------
+    AFRAME.registerComponent('fade-on-proximity', {
+      schema: {
+        radius:    { type: 'number', default: 5 },
+        fadeSpeed: { type: 'number', default: 0.02 }
+      },
+      init() {
+        this.cam       = document.querySelector('[camera]').object3D;
+        this.soundComp = this.el.components.sound;
+        this.currentVol = 0;
+        this.playing   = false;
+        this.el.setAttribute('sound','volume', 0);
+      },
+      tick() {
+        const dist   = this.cam.position.distanceTo(this.el.object3D.position);
+        const inside = dist < this.data.radius;
+
+        if (inside) {
+          if (!this.playing) {
+            this.soundComp.stopSound();
+            this.soundComp.playSound();
+            this.playing = true;
+          }
+          this.currentVol += (1 - this.currentVol) * this.data.fadeSpeed;
+        } else if (this.playing) {
+          this.currentVol += (0 - this.currentVol) * this.data.fadeSpeed;
+          if (this.currentVol < 0.01) {
+            this.soundComp.stopSound();
+            this.playing    = false;
+            this.currentVol = 0;
+          }
+        }
+        this.el.setAttribute('sound','volume', this.currentVol);
+      }
+    });
+
+    // -------- COMPONENT: room-boundary --------
+    AFRAME.registerComponent('room-boundary',{ 
+      tick() {
+        const p = this.el.object3D.position;
+        p.x = Math.max(-19, Math.min(19, p.x));
+        p.z = Math.max(-19, Math.min(19, p.z));
+      }
+    });
+
+    // -------- AudioContext unlock --------
+    window.addEventListener('click', () => {
+      const soundSys = document.querySelector('a-scene')?.systems?.sound;
+      if (soundSys?.context?.state === 'suspended') {
+        soundSys.context.resume();
+      }
+    });
+
+    // -------- Utility: check if a file exists via HEAD --------
+    async function fileExists(url) {
+      try {
+        const res = await fetch(url, { method:'HEAD' });
+        return res.ok;
+      } catch {
+        return false;
+      }
+    }
+
+    // -------- Build assets & panels dynamically --------
+    window.addEventListener('DOMContentLoaded', async () => {
+      const scene  = document.querySelector('a-scene');
+      const assets = document.querySelector('a-assets');
+
+      for (const art of artworks) {
+        const imgUrl = galleryPath + art.img;
+        // if no image, skip this panel entirely
+        if (!(await fileExists(imgUrl))) {
+          console.warn(`Skipping ${art.id}: missing image`);
+          continue;
+        }
+        // always inject the image
+        const imgEl = document.createElement('img');
+        imgEl.id    = `${art.id}-img`;
+        imgEl.src   = imgUrl;
+        assets.appendChild(imgEl);
+
+        // check for audio; inject if present
+        const sndUrl = audioPath + art.snd;
+        const hasSnd = await fileExists(sndUrl);
+        let audioEl;
+        if (hasSnd) {
+          audioEl      = document.createElement('audio');
+          audioEl.id   = `${art.id}-snd`;
+          audioEl.src  = sndUrl;
+          assets.appendChild(audioEl);
+        }
+
+        // build the plane
+        const plane = document.createElement('a-plane');
+        plane.setAttribute('position', art.position.join(' '));
+        plane.setAttribute('rotation', art.rotation.join(' '));
+        plane.setAttribute('width',    '4');
+        plane.setAttribute('height',   '4');
+        plane.setAttribute('material', `src: #${art.id}-img`);
+
+        // if we have sound, attach it + fade component
+        if (hasSnd) {
+          plane.setAttribute('sound',           `src: #${art.id}-snd; positional: true; loop: true`);
+          plane.setAttribute('fade-on-proximity','radius:5; fadeSpeed:0.02');
+        }
+
+        scene.appendChild(plane);
+      }
+    });
+  </script>
+</head>
+<body>
+  <a-scene>
+    <!-- dynamically injected assets -->
+    <a-assets></a-assets>
+
+    <!-- lighting -->
+    <a-entity light="type: ambient; intensity: 0.4"></a-entity>
+    <a-entity light="type: point; intensity: 1; distance: 50; decay: 2" position="0 5 0"></a-entity>
+
+    <!-- floor -->
+    <a-box position="0 0 0" rotation="-90 0 0"
+           width="40" height="40" depth="0.1" color="#000"></a-box>
+
+    <!-- ceiling -->
+    <a-box position="0 6 0" rotation="90 0 0"
+           width="40" height="40" depth="0.1" color="#000"></a-box>
+
+    <!-- walls -->
+    <a-box position=" 0 3 -20" width="40" height="6" depth="0.1" color="#000"></a-box>
+    <a-box position=" 0 3  20" rotation="0 180 0" width="40" height="6" depth="0.1" color="#000"></a-box>
+    <a-box position="-20 3   0" rotation="0  90 0" width="40" height="6" depth="0.1" color="#000"></a-box>
+    <a-box position=" 20 3   0" rotation="0 -90 0" width="40" height="6" depth="0.1" color="#000"></a-box>
+
+    <!-- camera -->
+    <a-entity camera wasd-controls="acceleration:30"
+              look-controls room-boundary
+              position="0 1.6 0"></a-entity>
+  </a-scene>
+</body>
+</html>
