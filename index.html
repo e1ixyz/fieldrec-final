@@ -1,33 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>sw/fw final</title>
+  <meta charset="UTF-8" />
+  <title>gallery</title>
   <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
   <script>
     // -------- CONFIGURATION --------
     const galleryPath = 'assets/gallery/';
     const audioPath   = 'assets/audio/';
     const artworks = [
-      { id:'A', img:'a.jpeg', snd:'a.m4a', position:[-12,1.6,-19], rotation:[0,   0,0] },
-      { id:'B', img:'b.jpeg', snd:'b.wav', position:[  0,1.6,-19], rotation:[0,   0,0] },
-      { id:'C', img:'c.jpeg', snd:'c.wav', position:[ 12,1.6,-19], rotation:[0,   0,0] },
-      { id:'D', img:'d.jpeg', snd:'d.mp3', position:[-12,1.6, 19], rotation:[0, 180,0] },
-      { id:'E', img:'e.jpeg', snd:'e.wav', position:[  0,1.6, 19], rotation:[0, 180,0] },
-      { id:'F', img:'f.jpeg', snd:'f.mp3', position:[ 12,1.6, 19], rotation:[0, 180,0] },
-      { id:'G', img:'g.jpeg', snd:'g.mp3', position:[-19,1.6,-12], rotation:[0,  90,0] },
-      { id:'H', img:'h.jpeg', snd:'h.mp3', position:[-19,1.6,  0], rotation:[0,  90,0] },
-      { id:'I', img:'i.jpeg', snd:'i.mp3', position:[-19,1.6, 12], rotation:[0,  90,0] },
-      { id:'J', img:'j.jpeg', snd:'j.mp3', position:[ 19,1.6,-12], rotation:[0, -90,0] },
-      { id:'K', img:'k.jpeg', snd:'k.mp3', position:[ 19,1.6,  0], rotation:[0, -90,0] },
-      { id:'L', img:'l.jpeg', snd:'l.mp3', position:[ 19,1.6, 12], rotation:[0, -90,0] }
+      { id:'A', img:'a.jpeg', position:[-12,1.6,-19], rotation:[0,   0,0] },
+      { id:'B', img:'b.jpeg', position:[  0,1.6,-19], rotation:[0,   0,0] },
+      { id:'C', img:'c.jpeg', position:[ 12,1.6,-19], rotation:[0,   0,0] },
+      { id:'D', img:'d.jpeg', position:[-12,1.6, 19], rotation:[0, 180,0] },
+      { id:'E', img:'e.jpeg', position:[  0,1.6, 19], rotation:[0, 180,0] },
+      { id:'F', img:'f.jpeg', position:[ 12,1.6, 19], rotation:[0, 180,0] },
+      { id:'G', img:'g.jpeg', position:[-19,1.6,-12], rotation:[0,  90,0] },
+      { id:'H', img:'h.jpeg', position:[-19,1.6,  0], rotation:[0,  90,0] },
+      { id:'I', img:'i.jpeg', position:[-19,1.6, 12], rotation:[0,  90,0] },
+      { id:'J', img:'j.jpeg', position:[ 19,1.6,-12], rotation:[0, -90,0] },
+      { id:'K', img:'k.jpeg', position:[ 19,1.6,  0], rotation:[0, -90,0] },
+      { id:'L', img:'l.jpeg', position:[ 19,1.6, 12], rotation:[0, -90,0] }
     ];
 
     // -------- COMPONENT: fade-on-proximity --------
     AFRAME.registerComponent('fade-on-proximity', {
       schema: {
-        radius:    { type: 'number', default: 5 },
-        fadeSpeed: { type: 'number', default: 0.02 }
+        radius:    { type: 'number', default: 30 },  // larger zones
+        fadeSpeed: { type: 'number', default: 0.12 }
       },
       init() {
         this.cam       = document.querySelector('[camera]').object3D;
@@ -37,9 +37,9 @@
         this.el.setAttribute('sound','volume', 0);
       },
       tick() {
-        const dist   = this.cam.position.distanceTo(this.el.object3D.position);
-        const inside = dist < this.data.radius;
-
+        if (!this.soundComp) return;
+        const d      = this.cam.position.distanceTo(this.el.object3D.position);
+        const inside = d < this.data.radius;
         if (inside) {
           if (!this.playing) {
             this.soundComp.stopSound();
@@ -86,49 +86,29 @@
       }
     }
 
-    // -------- Build assets & panels dynamically --------
+    // -------- Build assets & art planes dynamically --------
     window.addEventListener('DOMContentLoaded', async () => {
       const scene  = document.querySelector('a-scene');
       const assets = document.querySelector('a-assets');
 
+      // inject artwork images
       for (const art of artworks) {
         const imgUrl = galleryPath + art.img;
-        // if no image, skip this panel entirely
         if (!(await fileExists(imgUrl))) {
           console.warn(`Skipping ${art.id}: missing image`);
           continue;
         }
-        // always inject the image
         const imgEl = document.createElement('img');
         imgEl.id    = `${art.id}-img`;
         imgEl.src   = imgUrl;
         assets.appendChild(imgEl);
 
-        // check for audio; inject if present
-        const sndUrl = audioPath + art.snd;
-        const hasSnd = await fileExists(sndUrl);
-        let audioEl;
-        if (hasSnd) {
-          audioEl      = document.createElement('audio');
-          audioEl.id   = `${art.id}-snd`;
-          audioEl.src  = sndUrl;
-          assets.appendChild(audioEl);
-        }
-
-        // build the plane
         const plane = document.createElement('a-plane');
         plane.setAttribute('position', art.position.join(' '));
         plane.setAttribute('rotation', art.rotation.join(' '));
         plane.setAttribute('width',    '4');
         plane.setAttribute('height',   '4');
         plane.setAttribute('material', `src: #${art.id}-img`);
-
-        // if we have sound, attach it + fade component
-        if (hasSnd) {
-          plane.setAttribute('sound',           `src: #${art.id}-snd; positional: true; loop: true`);
-          plane.setAttribute('fade-on-proximity','radius:5; fadeSpeed:0.02');
-        }
-
         scene.appendChild(plane);
       }
     });
@@ -136,8 +116,41 @@
 </head>
 <body>
   <a-scene>
-    <!-- dynamically injected assets -->
-    <a-assets></a-assets>
+    <!-- audio assets -->
+    <a-assets>
+      <audio id="A-snd" src="assets/audio/a.m4a"></audio>
+      <audio id="B-snd" src="assets/audio/b.wav"></audio>
+      <audio id="C-snd" src="assets/audio/c.wav"></audio>
+      <audio id="D-snd" src="assets/audio/d.mp3"></audio>
+      <audio id="E-snd" src="assets/audio/e.wav"></audio>
+    </a-assets>
+
+    <!-- audio zones -->
+    <a-entity
+      sound="src: #A-snd; positional: true; loop: true"
+      fade-on-proximity="radius:15; fadeSpeed:0.02"
+      position="0 1.6 0">
+    </a-entity>
+    <a-entity
+      sound="src: #B-snd; positional: true; loop: true"
+      fade-on-proximity="radius:15; fadeSpeed:0.02"
+      position="-19 1.6 -19">
+    </a-entity>
+    <a-entity
+      sound="src: #C-snd; positional: true; loop: true"
+      fade-on-proximity="radius:15; fadeSpeed:0.02"
+      position="19 1.6 -19">
+    </a-entity>
+    <a-entity
+      sound="src: #D-snd; positional: true; loop: true"
+      fade-on-proximity="radius:15; fadeSpeed:0.02"
+      position="-19 1.6 19">
+    </a-entity>
+    <a-entity
+      sound="src: #E-snd; positional: true; loop: true"
+      fade-on-proximity="radius:15; fadeSpeed:0.02"
+      position="19 1.6 19">
+    </a-entity>
 
     <!-- lighting -->
     <a-entity light="type: ambient; intensity: 0.4"></a-entity>
@@ -160,7 +173,8 @@
     <!-- camera -->
     <a-entity camera wasd-controls="acceleration:30"
               look-controls room-boundary
-              position="0 1.6 0"></a-entity>
+              position="0 1.6 0">
+    </a-entity>
   </a-scene>
 </body>
 </html>
